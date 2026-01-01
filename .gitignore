@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+web/node_modules/
+za-mobile/node_modules/
+
+# Build outputs
+web/dist/
+za-mobile/dist/
+za-mobile/.expo/
+
+# Environment files
+.env
+web/.env
+za-mobile/.env
+
+# Local logs
+*.log

@@ -1,0 +1,20 @@
+{
+    "name": "allo-police-server",
+    "version": "1.0.0",
+    "description": "Backend for Allo Police App",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "node --watch index.js"
+    },
+    "dependencies": {
+        "bcryptjs": "^3.0.3",
+        "cors": "^2.8.5",
+        "express": "^4.21.2",
+        "jsonwebtoken": "^9.0.3",
+        "multer": "^2.0.2",
+        "selfsigned": "^5.4.0",
+        "socket.io": "^4.8.1"
+    }
+}

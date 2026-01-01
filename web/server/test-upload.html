@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار رفع الملفات</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #002347;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #002347;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #003a6b;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 اختبار إرسال البلاغ</h1>
+        
+        <form id="testForm">
+            <div class="form-group">
+                <label>نوع التبليغ:</label>
+                <select id="category" required>
+                    <option value="">اختر...</option>
+                    <option value="حادث مرور">حادث مرور</option>
+                    <option value="حريق">حريق</option>
+                    <option value="فيضانات">فيضانات</option>
+                    <option value="طلب نجدة">طلب نجدة</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>الوصف:</label>
+                <textarea id="description" rows="4" required placeholder="اكتب تفاصيل الحادث..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>الموقع:</label>
+                <input type="text" id="location" value="موقع تجريبي" required>
+            </div>
+
+            <div class="form-group">
+                <label>صور/فيديو (اختياري):</label>
+                <input type="file" id="media" multiple accept="image/*,video/*">
+            </div>
+
+            <button type="submit">إرسال البلاغ</button>
+        </form>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const SERVER_URL = 'http://192.168.43.134:3000';
+        
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                formData.append('type', 'event');
+                formData.append('category', document.getElementById('category').value);
+                formData.append('description', document.getElementById('description').value);
+                formData.append('location', document.getElementById('location').value);
+                
+                const files = document.getElementById('media').files;
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('media', files[i]);
+                }
+                
+                console.log('Sending request to:', SERVER_URL + '/api/reports');
+                
+                const response = await fetch(SERVER_URL + '/api/reports', {
+                    method: 'POST',
+                    body: formData
+                    // Don't set Content-Type - FormData sets it automatically
+                });
+                
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok) {
+                    resultDiv.className = 'success';
+                    resultDiv.textContent = '✅ تم إرسال البلاغ بنجاح! ID: ' + data.id;
+                    document.getElementById('testForm').reset();
+                } else {
+                    throw new Error(data.error || 'فشل الإرسال');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.className = 'error';
+                resultDiv.textContent = '❌ خطأ: ' + error.message;
+            }
+            
+            resultDiv.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
