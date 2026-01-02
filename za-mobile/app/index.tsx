@@ -63,9 +63,9 @@ export default function Index() {
       try {
         const { Audio } = require('expo-av');
         await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
+          allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
+          staysActiveInBackground: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false
         });
@@ -154,7 +154,11 @@ export default function Index() {
 
       // 4. Setup Peer
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
       });
       peerRef.current = pc;
 
