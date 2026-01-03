@@ -48,6 +48,7 @@ export default function Index() {
   const peerRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
+  const [dashboardSocketId, setDashboardSocketId] = useState<string | null>(null);
   const myCallerId = useRef<string>('User-' + Math.floor(Math.random() * 1000));
 
   useEffect(() => {
@@ -78,6 +79,7 @@ export default function Index() {
       console.log('Call answered by admin');
       setIsCallAnswered(true);
       if (data.answer && peerRef.current) {
+        setDashboardSocketId(data.dashboardSocketId); // Capture the dashboard's ID
         try {
           await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
         } catch (e) {
@@ -133,12 +135,24 @@ export default function Index() {
       peerRef.current = null;
     }
     setRemoteStream(null);
+    setDashboardSocketId(null);
   };
 
   const handleCall = async (number: string) => {
     setCallName(number === 'SOS' ? 'إنذار فوري' : ('رقم طوارئ: ' + number));
     setIsCallAnswered(false);
     setView('call');
+
+    // Explicit Mic Request for Native
+    if (Platform.OS !== 'web') {
+      const { Audio } = require('expo-av');
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('صلاحية الميكروفون', 'يحتاج التطبيق لصلاحية الميكروفون لإجراء المكالمة.');
+        handleCleanupCall();
+        return;
+      }
+    }
 
     try {
       // 1. Check for Secure Context (Important for WebRTC on Web)
@@ -193,7 +207,10 @@ export default function Index() {
       // 6. Handle ICE
       pc.onicecandidate = (event: any) => {
         if (event.candidate && socketRef.current) {
-          socketRef.current.emit('ice_candidate', { candidate: event.candidate });
+          socketRef.current.emit('ice_candidate', {
+            candidate: event.candidate,
+            targetId: dashboardSocketId // Send specifically to the dashboard answering this call
+          });
         }
       };
 
@@ -280,7 +297,7 @@ export default function Index() {
           <CallScreen onEndCall={handleEndCall} name={callName} isAnswered={isCallAnswered} />
           {isCallAnswered && remoteStream && RTCView && (
             <RTCView
-              streamURL={remoteStream.toURL()}
+              stream={remoteStream}
               style={{ width: 0, height: 0 }} // Hidden but active for audio
             />
           )}
