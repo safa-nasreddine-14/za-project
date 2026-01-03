@@ -48,7 +48,7 @@ export default function Index() {
   const peerRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
-  const [dashboardSocketId, setDashboardSocketId] = useState<string | null>(null);
+  const dashboardSocketIdRef = useRef<string | null>(null);
   const iceQueueRef = useRef<any[]>([]);
   const myCallerId = useRef<string>('User-' + Math.floor(Math.random() * 1000));
 
@@ -80,7 +80,7 @@ export default function Index() {
       console.log('Call answered by admin');
       setIsCallAnswered(true);
       if (data.answer && peerRef.current) {
-        setDashboardSocketId(data.dashboardSocketId); // Capture the dashboard's ID
+        dashboardSocketIdRef.current = data.dashboardSocketId; // Capture the dashboard's ID in Ref
         try {
           await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
 
@@ -150,7 +150,7 @@ export default function Index() {
       peerRef.current = null;
     }
     setRemoteStream(null);
-    setDashboardSocketId(null);
+    dashboardSocketIdRef.current = null;
     iceQueueRef.current = [];
   };
 
@@ -214,9 +214,10 @@ export default function Index() {
       // Handle Remote Track
       pc.ontrack = (event: any) => {
         console.log('Received remote track on mobile');
-        if (event.streams && event.streams[0]) {
-          console.log('Remote stream found in ontrack');
-          setRemoteStream(event.streams[0]);
+        const rStream = (event.streams && event.streams[0]) ? event.streams[0] : (event.track ? new MediaStream([event.track]) : null);
+        if (rStream) {
+          console.log('Remote stream/track attached');
+          setRemoteStream(rStream);
         }
       };
 
@@ -233,13 +234,16 @@ export default function Index() {
         if (event.candidate && socketRef.current) {
           socketRef.current.emit('ice_candidate', {
             candidate: event.candidate,
-            targetId: dashboardSocketId // Send specifically to the dashboard answering this call
+            targetId: dashboardSocketIdRef.current // Use current Ref value
           });
         }
       };
 
       // 7. Create Offer
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
+      });
       await pc.setLocalDescription(offer);
 
       // 8. Send Signal
