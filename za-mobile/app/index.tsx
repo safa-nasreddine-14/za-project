@@ -49,6 +49,7 @@ export default function Index() {
   const streamRef = useRef<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
   const [dashboardSocketId, setDashboardSocketId] = useState<string | null>(null);
+  const iceQueueRef = useRef<any[]>([]);
   const myCallerId = useRef<string>('User-' + Math.floor(Math.random() * 1000));
 
   useEffect(() => {
@@ -82,6 +83,15 @@ export default function Index() {
         setDashboardSocketId(data.dashboardSocketId); // Capture the dashboard's ID
         try {
           await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+
+          // Process queued candidates
+          console.log(`Mobile: Processing ${iceQueueRef.current.length} queued candidates`);
+          while (iceQueueRef.current.length > 0) {
+            const cand = iceQueueRef.current.shift();
+            try {
+              await peerRef.current.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) { console.warn("Mobile: Failed to add queued candidate", e); }
+          }
         } catch (e) {
           console.error("Failed to set remote description on mobile", e);
         }
@@ -89,11 +99,16 @@ export default function Index() {
     });
 
     socketRef.current.on('ice_candidate', async (data: any) => {
-      if (data.candidate && peerRef.current) {
-        try {
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {
-          console.error("Failed to add ice candidate on mobile", e);
+      if (data.candidate) {
+        if (peerRef.current && peerRef.current.remoteDescription) {
+          try {
+            await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (e) {
+            console.error("Failed to add ice candidate on mobile", e);
+          }
+        } else {
+          console.log('Mobile: Queuing ICE candidate');
+          iceQueueRef.current.push(data.candidate);
         }
       }
     });
@@ -136,14 +151,16 @@ export default function Index() {
     }
     setRemoteStream(null);
     setDashboardSocketId(null);
+    iceQueueRef.current = [];
   };
 
   const handleCall = async (number: string) => {
     setCallName(number === 'SOS' ? 'إنذار فوري' : ('رقم طوارئ: ' + number));
     setIsCallAnswered(false);
     setView('call');
+    iceQueueRef.current = []; // Clear queue for new call
 
-    // Explicit Mic Request for Native
+    // Explicit Mic Request and Speaker Force
     if (Platform.OS !== 'web') {
       const { Audio } = require('expo-av');
       const { status } = await Audio.requestPermissionsAsync();
@@ -152,6 +169,13 @@ export default function Index() {
         handleCleanupCall();
         return;
       }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false // Force Speaker
+      });
     }
 
     try {
