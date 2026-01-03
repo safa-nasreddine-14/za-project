@@ -15,6 +15,7 @@ let RTCPeerConnection: any;
 let mediaDevices: any;
 let RTCSessionDescription: any;
 let RTCIceCandidate: any;
+let RTCView: any;
 
 if (Platform.OS === 'web') {
   RTCPeerConnection = (window as any).RTCPeerConnection || (window as any).webkitRTCPeerConnection;
@@ -29,6 +30,7 @@ if (Platform.OS === 'web') {
     mediaDevices = WebRTC.mediaDevices;
     RTCSessionDescription = WebRTC.RTCSessionDescription;
     RTCIceCandidate = WebRTC.RTCIceCandidate;
+    RTCView = WebRTC.RTCView;
   } catch (e) {
     console.warn('react-native-webrtc not found on native');
   }
@@ -45,7 +47,7 @@ export default function Index() {
   const socketRef = useRef<any>(null);
   const peerRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
-  const remoteStreamRef = useRef<any>(null);
+  const [remoteStream, setRemoteStream] = useState<any>(null);
   const myCallerId = useRef<string>('User-' + Math.floor(Math.random() * 1000));
 
   useEffect(() => {
@@ -130,6 +132,7 @@ export default function Index() {
       peerRef.current.close();
       peerRef.current = null;
     }
+    setRemoteStream(null);
   };
 
   const handleCall = async (number: string) => {
@@ -170,16 +173,22 @@ export default function Index() {
         stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
       }
 
-      // Handle Remote Track (Missing in previous version)
+      // Handle Remote Track
       pc.ontrack = (event: any) => {
         console.log('Received remote track on mobile');
-        // On native, we don't necessarily need to attach to an audio element for just audio 
-        // if the native module handles it, but for web or clarity:
         if (event.streams && event.streams[0]) {
-          // Native module usually handles the audio output automatically if it's an audio-only pc
-          console.log('Remote stream attached');
+          console.log('Remote stream found in ontrack');
+          setRemoteStream(event.streams[0]);
         }
       };
+
+      // Native onaddstream fallback
+      if (Platform.OS !== 'web') {
+        pc.onaddstream = (event: any) => {
+          console.log('Received remote stream via onaddstream (Native)');
+          setRemoteStream(event.stream);
+        };
+      }
 
       // 6. Handle ICE
       pc.onicecandidate = (event: any) => {
@@ -267,7 +276,15 @@ export default function Index() {
       )}
 
       {view === 'call' && (
-        <CallScreen onEndCall={handleEndCall} name={callName} isAnswered={isCallAnswered} />
+        <View style={{ flex: 1 }}>
+          <CallScreen onEndCall={handleEndCall} name={callName} isAnswered={isCallAnswered} />
+          {isCallAnswered && remoteStream && RTCView && (
+            <RTCView
+              streamURL={remoteStream.toURL()}
+              style={{ width: 0, height: 0 }} // Hidden but active for audio
+            />
+          )}
+        </View>
       )}
 
     </SafeAreaView>
