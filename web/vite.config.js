@@ -3,10 +3,10 @@ import react from '@vitejs/plugin-react'
 import obfuscator from 'vite-plugin-javascript-obfuscator'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     react(),
-    obfuscator({
+    command === 'build' && obfuscator({
       compact: true,
       controlFlowFlattening: true,
       controlFlowFlatteningThreshold: 0.75,
@@ -19,7 +19,7 @@ export default defineConfig({
       shuffleStringArray: true,
       stringArray: true,
     }),
-  ],
+  ].filter(Boolean),
   server: {
     host: true,
     proxy: {
@@ -41,4 +41,4 @@ export default defineConfig({
       },
     }
   }
-});
+}));

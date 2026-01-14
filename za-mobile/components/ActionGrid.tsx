@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { Mic, AlertTriangle, BellRing } from 'lucide-react-native';
 
 export default function ActionGrid({ onOpenReport, onEmergencyCall, location }: { onOpenReport: (type: string) => void, onEmergencyCall: () => void, location: string | null }) {
@@ -6,34 +6,39 @@ export default function ActionGrid({ onOpenReport, onEmergencyCall, location }: 
 
 
     const handleAlarm = () => {
-        Alert.alert(
-            'إنذار فوري',
-            'سيتم إجراء اتصال طارئ بمركز العمليات. هل أنت متأكد؟',
-            [
-                { text: 'إلغاء', style: 'cancel' },
-                {
-                    text: 'اتصال الآن',
-                    onPress: async () => {
-                        onEmergencyCall();
-                        // Also trigger the API alarm for the dashboard to record it
-                        try {
-                            const { ENDPOINTS } = require('../constants/Config');
-                            await fetch(ENDPOINTS.ALARMS, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    deviceId: 'Mobile-User',
-                                    location: location || 'غير محدد',
-                                    type: 'SOS'
-                                })
-                            });
-                        } catch (e) {
-                            console.error('Failed to send SOS alarm to API:', e);
-                        }
-                    }
-                }
-            ]
-        );
+        const triggerCall = async () => {
+            console.log('ActionGrid: Triggering SOS alarm...');
+            onEmergencyCall();
+            try {
+                const { ENDPOINTS } = require('../constants/Config');
+                await fetch(ENDPOINTS.ALARMS, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: 'Mobile-User',
+                        location: location || 'غير محدد',
+                        type: 'SOS'
+                    })
+                });
+            } catch (e) {
+                console.error('Failed to send SOS alarm to API:', e);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm('إنذار فوري: سيتم إجراء اتصال طارئ بمركز العمليات. هل أنت متأكد؟')) {
+                triggerCall();
+            }
+        } else {
+            Alert.alert(
+                'إنذار فوري',
+                'سيتم إجراء اتصال طارئ بمركز العمليات. هل أنت متأكد؟',
+                [
+                    { text: 'إلغاء', style: 'cancel' },
+                    { text: 'اتصال الآن', onPress: triggerCall }
+                ]
+            );
+        }
     };
 
 
@@ -77,7 +82,7 @@ export default function ActionGrid({ onOpenReport, onEmergencyCall, location }: 
 
 const styles = StyleSheet.create({
     gridContainer: {
-        padding: 16,
+        padding: 8,
         gap: 16,
     },
     topRow: {

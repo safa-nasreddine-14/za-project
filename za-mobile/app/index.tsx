@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, StyleSheet, SafeAreaView, StatusBar, Alert, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import io from 'socket.io-client';
+import { Audio } from 'expo-av'; // Added Audio import
 import Header from '../components/Header';
 import Hero from '../components/Hero';
 import ActionGrid from '../components/ActionGrid';
@@ -10,31 +11,15 @@ import ReportForm from '../components/ReportForm';
 import VoiceRecorder from '../components/VoiceRecorder';
 import CallScreen from '../components/CallScreen';
 
-// Polyfills/Imports for WebRTC
-let RTCPeerConnection: any;
-let mediaDevices: any;
-let RTCSessionDescription: any;
-let RTCIceCandidate: any;
-let RTCView: any;
-
-if (Platform.OS === 'web') {
-  RTCPeerConnection = (window as any).RTCPeerConnection || (window as any).webkitRTCPeerConnection;
-  mediaDevices = navigator.mediaDevices;
-  RTCSessionDescription = (window as any).RTCSessionDescription;
-  RTCIceCandidate = (window as any).RTCIceCandidate;
-} else {
-  // These will be available if react-native-webrtc is installed
-  try {
-    const WebRTC = require('react-native-webrtc');
-    RTCPeerConnection = WebRTC.RTCPeerConnection;
-    mediaDevices = WebRTC.mediaDevices;
-    RTCSessionDescription = WebRTC.RTCSessionDescription;
-    RTCIceCandidate = WebRTC.RTCIceCandidate;
-    RTCView = WebRTC.RTCView;
-  } catch (e) {
-    console.warn('react-native-webrtc not found on native');
-  }
-}
+// WebRTC Service Wrapper
+import {
+  RTCPeerConnection,
+  RTCIceCandidate,
+  RTCSessionDescription,
+  mediaDevices,
+  MediaStream,
+} from '../utils/WebRTCService';
+import axios from 'axios';
 
 import { BASE_URL as SERVER_URL } from '../constants/Config';
 
@@ -44,82 +29,86 @@ export default function Index() {
   const [callName, setCallName] = useState('مركز العمليات');
   const [isCallAnswered, setIsCallAnswered] = useState(false);
   const [location, setLocation] = useState<string | null>(null);
+
   const socketRef = useRef<any>(null);
-  const peerRef = useRef<any>(null);
-  const streamRef = useRef<any>(null);
-  const [remoteStream, setRemoteStream] = useState<any>(null);
-  const dashboardSocketIdRef = useRef<string | null>(null);
-  const iceQueueRef = useRef<any[]>([]);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const myCallerId = useRef<string>('User-' + Math.floor(Math.random() * 1000));
+  const dashboardSocketIdRef = useRef<string | null>(null);
+  const ringtoneRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
+    // Initialize Socket
     socketRef.current = io(SERVER_URL);
 
     // Auto-fetch location on mount
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        let loc = await Location.getCurrentPositionAsync({});
-        setLocation(`${loc.coords.latitude}, ${loc.coords.longitude}`);
+      console.log('Mobile App: Starting initialization...');
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          let loc = await Location.getCurrentPositionAsync({});
+          setLocation(`${loc.coords.latitude}, ${loc.coords.longitude}`);
+        }
+      } catch (e) {
+        console.log('Location fetch failed', e);
       }
 
-      // Initialize Audio mode for transitions
+      // Initialize Audio mode
       try {
-        const { Audio } = require('expo-av');
+        // const { Audio } = require('expo-av'); // This line is now redundant as Audio is imported at the top
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false
+          playThroughEarpieceAndroid: false,
+          interruptionModeIOS: 1,
+          interruptionModeAndroid: 1,
         });
-      } catch (e) { }
+        console.log('Mobile App: Audio mode initialized');
+      } catch (e) {
+        console.log('Audio mode setup failed', e);
+      }
     })();
 
-    socketRef.current.on('call_answered', async (data: any) => {
-      console.log('Call answered by admin');
-      setIsCallAnswered(true);
-      if (data.answer && peerRef.current) {
-        dashboardSocketIdRef.current = data.dashboardSocketId; // Capture the dashboard's ID in Ref
-        try {
-          await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
-
-          // Process queued candidates
-          console.log(`Mobile: Processing ${iceQueueRef.current.length} queued candidates`);
-          while (iceQueueRef.current.length > 0) {
-            const cand = iceQueueRef.current.shift();
-            try {
-              await peerRef.current.addIceCandidate(new RTCIceCandidate(cand));
-            } catch (e) { console.warn("Mobile: Failed to add queued candidate", e); }
-          }
-        } catch (e) {
-          console.error("Failed to set remote description on mobile", e);
-        }
-      }
-    });
-
-    socketRef.current.on('ice_candidate', async (data: any) => {
-      if (data.candidate) {
-        if (peerRef.current && peerRef.current.remoteDescription) {
+    const socket = socketRef.current;
+    if (socket) {
+      socket.on('call_answered', async (data: any) => {
+        console.log('Call signaling: answered');
+        stopRingtone(); // Stop ringback tone
+        if (data.answer && pcRef.current) {
           try {
-            await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+            dashboardSocketIdRef.current = data.dashboardSocketId;
+            await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+            setIsCallAnswered(true);
           } catch (e) {
-            console.error("Failed to add ice candidate on mobile", e);
+            console.error('Error setting remote description:', e);
           }
         } else {
-          console.log('Mobile: Queuing ICE candidate');
-          iceQueueRef.current.push(data.candidate);
+          setIsCallAnswered(true);
         }
-      }
-    });
+      });
 
-    socketRef.current.on('call_ended', () => {
-      handleCleanupCall();
-      Alert.alert('انتهت المكالمة', 'تم إنهاء المكالمة من قبل الطرف الثاني.');
-    });
+      socket.on('ice_candidate', async (data: any) => {
+        if (data.candidate && pcRef.current) {
+          try {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (e) {
+            console.error('Error adding ice candidate:', e);
+          }
+        }
+      });
+
+      socket.on('call_ended', () => {
+        handleCleanupCall();
+        Alert.alert('انتهت المكالمة', 'تم إنهاء المكالمة من قبل الطرف الثاني.');
+      });
+    }
 
     return () => {
-      if (socketRef.current) socketRef.current.disconnect();
+      if (socket) socket.disconnect();
+      handleCleanupCall();
     };
   }, []);
 
@@ -137,179 +126,131 @@ export default function Index() {
     setReportType(null);
   };
 
-  const handleCleanupCall = () => {
+  const stopRingtone = async () => {
+    if (ringtoneRef.current) {
+      try {
+        await ringtoneRef.current.unloadAsync();
+        ringtoneRef.current = null;
+      } catch (e) {
+        console.error('Error stopping ringtone:', e);
+      }
+    }
+  };
 
+  const handleCleanupCall = () => {
+    stopRingtone();
     setView('home');
     setIsCallAnswered(false);
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t: any) => t.stop());
-      streamRef.current = null;
+
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
     }
-    if (peerRef.current) {
-      peerRef.current.close();
-      peerRef.current = null;
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
     }
-    setRemoteStream(null);
-    dashboardSocketIdRef.current = null;
-    iceQueueRef.current = [];
   };
 
   const handleCall = async (number: string) => {
+    if (view === 'call') return; // Prevent multiple calls
     setCallName(number === 'SOS' ? 'إنذار فوري' : ('رقم طوارئ: ' + number));
     setIsCallAnswered(false);
     setView('call');
-    iceQueueRef.current = []; // Clear queue for new call
 
-    // Explicit Mic Request and Speaker Force
-    if (Platform.OS !== 'web') {
-      const { Audio } = require('expo-av');
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('صلاحية الميكروفون', 'يحتاج التطبيق لصلاحية الميكروفون لإجراء المكالمة.');
-        handleCleanupCall();
-        return;
-      }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false // Force Speaker
-      });
+    // Play Ringback Tone
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://www.soundjay.com/phone/phone-calling-1.mp3' }, // Simple ringback sound
+        { shouldPlay: true, isLooping: true }
+      );
+      ringtoneRef.current = sound;
+    } catch (e) {
+      console.error('Failed to play ringtone:', e);
     }
 
+    console.log(`Starting WebRTC call to: ${number}`);
     try {
-      // 1. Check for Secure Context (Important for WebRTC on Web)
-      if (Platform.OS === 'web' && !window.isSecureContext && window.location.hostname !== 'localhost') {
-        throw new Error('SECURE_CONTEXT_REQUIRED');
-      }
-
-      // 2. Check for Support
-      if (!mediaDevices || !RTCPeerConnection) {
-        throw new Error('WEBRTC_UNSUPPORTED');
-      }
-
-      // 3. Get Mic
-      const stream = await mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      // 4. Setup Peer
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+      // 1. Get Local Stream
+      const stream: any = await mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
       });
-      peerRef.current = pc;
+      localStreamRef.current = stream;
 
-      // 5. Add tracks
-      if (Platform.OS === 'web') {
-        stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
-      } else {
-        // Native usage
-        stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
-      }
+      // 2. Create PeerConnection
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+      pcRef.current = pc;
 
-      // Handle Remote Track
-      pc.ontrack = (event: any) => {
-        console.log('Received remote track on mobile');
-        const rStream = (event.streams && event.streams[0]) ? event.streams[0] : (event.track ? new MediaStream([event.track]) : null);
-        if (rStream) {
-          console.log('Remote stream/track attached');
-          setRemoteStream(rStream);
-        }
-      };
+      // Add tracks
+      stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
 
-      // Native onaddstream fallback
-      if (Platform.OS !== 'web') {
-        pc.onaddstream = (event: any) => {
-          console.log('Received remote stream via onaddstream (Native)');
-          setRemoteStream(event.stream);
-        };
-      }
-
-      // 6. Handle ICE
+      // Handle ICE
       pc.onicecandidate = (event: any) => {
         if (event.candidate && socketRef.current) {
           socketRef.current.emit('ice_candidate', {
             candidate: event.candidate,
-            targetId: dashboardSocketIdRef.current // Use current Ref value
+            callerId: myCallerId.current,
+            targetId: dashboardSocketIdRef.current
           });
         }
       };
 
-      // 7. Create Offer
+      pc.ontrack = (event: any) => {
+        console.log('Mobile App: Received track', event.streams);
+      };
+
+      // 3. Create Offer
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false
       });
       await pc.setLocalDescription(offer);
 
-      // 8. Send Signal
-      if (socketRef.current) {
+      // 4. Signaling
+      if (socketRef.current && socketRef.current.connected) {
+        console.log('Sending call_initiate signal via socket (WebRTC)');
         socketRef.current.emit('call_initiate', {
           callerId: myCallerId.current,
-          type: number === 'SOS' ? 'SOS' : 'voice',
           offer: offer,
+          type: number === 'SOS' ? 'SOS' : 'voice',
           location: location || 'غير محدد'
         });
+      } else {
+        console.warn('Socket not connected');
+        Alert.alert('خطأ في الاتصال', 'التطبيق غير متصل بالسيرفر حالياً.');
       }
     } catch (err: any) {
-      console.warn("WebRTC initialization failed:", err.message);
-
-      let errorMsg = 'تعذر بدء الاتصال الصوتي. ';
-
-      if (err.message === 'SECURE_CONTEXT_REQUIRED') {
-        errorMsg += 'يجب استخدام رابط آمن (HTTPS) أو الاتصال بـ localhost لتفعيل الميكروفون.';
-      } else if (err.message === 'WEBRTC_UNSUPPORTED') {
-        errorMsg += 'هذا المتصفح أو الجهاز لا يدعم تقنية الاتصال المباشر. ' + (Platform.OS !== 'web' ? 'الميزة تتطلب نسخة التطبيق الأصلية (Development Build).' : 'يرجى استخدام متصفح حديث.');
-      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMsg += 'يرجى منح صلاحية الميكروفون من إعدادات المتصفح أو الجهاز.';
-      } else {
-        errorMsg += 'يرجى التأكد من تفعيل الميكروفون وتوفر الاتصال.';
-      }
-
-      Alert.alert('تنبيه', errorMsg);
-
-      // Fallback: Just signaling (UI only)
-      if (socketRef.current) {
-        socketRef.current.emit('call_initiate', {
-          callerId: myCallerId.current,
-          type: number === 'SOS' ? 'SOS' : 'voice',
-          location: location || 'غير محدد'
-        });
-      }
+      console.error("Call initiation failed:", err);
+      Alert.alert('خطأ', `تعذر بدء الاتصال: ${err.message || 'خطأ غير معروف'}`);
+      handleCleanupCall();
     }
   };
-
 
   const handleEndCall = () => {
-    handleCleanupCall();
     if (socketRef.current) {
-      socketRef.current.emit('call_reject', { callerId: myCallerId.current });
+      socketRef.current.emit('call_ended', { callerId: myCallerId.current });
     }
+    handleCleanupCall();
   };
-
-
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       {view === 'home' && (
-        <>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            <Header />
-            <Hero />
-            <ActionGrid
-              onOpenReport={handleOpenReport}
-              onEmergencyCall={() => handleCall('SOS')}
-              location={location}
-            />
-            <QuickCallFooter />
-          </ScrollView>
-        </>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Header />
+          <Hero />
+          <ActionGrid
+            onOpenReport={handleOpenReport}
+            onEmergencyCall={() => handleCall('SOS')}
+            location={location}
+          />
+          <QuickCallFooter />
+        </ScrollView>
       )}
 
       {view === 'report' && reportType && (
@@ -323,20 +264,12 @@ export default function Index() {
       {view === 'call' && (
         <View style={{ flex: 1 }}>
           <CallScreen onEndCall={handleEndCall} name={callName} isAnswered={isCallAnswered} />
-          {isCallAnswered && remoteStream && RTCView && (
-            <RTCView
-              stream={remoteStream}
-              style={{ width: 0, height: 0 }} // Hidden but active for audio
-            />
-          )}
         </View>
       )}
 
     </SafeAreaView>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {

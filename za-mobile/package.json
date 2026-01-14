@@ -11,12 +11,14 @@
     "lint": "expo lint"
   },
   "dependencies": {
-    "@config-plugins/react-native-webrtc": "10.0.0",
+    "@config-plugins/react-native-webrtc": "^10.0.0",
     "@expo/prebuild-config": "^8.2.0",
     "@expo/vector-icons": "~14.0.0",
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/elements": "^2.0.0",
     "@react-navigation/native": "^7.0.0",
+    "react-native-webrtc": "^124.0.0",
+    "axios": "^1.13.2",
     "eslint-config-expo": "~8.0.1",
     "expo": "~52.0.30",
     "expo-av": "~15.0.2",
@@ -46,7 +48,6 @@
     "react-native-screens": "~4.4.0",
     "react-native-svg": "15.8.0",
     "react-native-web": "~0.19.13",
-    "react-native-webrtc": "124.0.0",
     "react-native-worklets-core": "^1.6.2",
     "socket.io-client": "^4.8.3"
   },

@@ -9,7 +9,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BASE_URL": "https://za-project-ouj7.onrender.com"
+        "EXPO_PUBLIC_BASE_URL": "https://za-project-1.onrender.com"
       }
     },
     "production": {

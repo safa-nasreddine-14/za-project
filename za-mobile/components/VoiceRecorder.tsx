@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { ArrowLeft, Mic, Square, Play, Send } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { ENDPOINTS } from '../constants/Config';
@@ -138,12 +138,18 @@ export default function VoiceRecorder({ onBack, location }: { onBack: () => void
         setLoading(true);
         try {
             const formData = new FormData();
-            // @ts-ignore
-            formData.append('audio', {
-                uri: soundUri,
-                name: 'voice_message.m4a',
-                type: 'audio/m4a',
-            });
+            if (Platform.OS === 'web') {
+                const response = await fetch(soundUri);
+                const blob = await response.blob();
+                formData.append('audio', blob, 'voice_message.m4a');
+            } else {
+                // @ts-ignore
+                formData.append('audio', {
+                    uri: soundUri,
+                    name: 'voice_message.m4a',
+                    type: 'audio/m4a',
+                });
+            }
             formData.append('location', location || 'غير محدد');
             formData.append('deviceId', 'Mobile-User');
 

@@ -10,22 +10,25 @@ export default function Header() {
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: 60,
+        paddingTop: 5,
         paddingBottom: 20,
-        backgroundColor: '#002347', // --primary-blue
+        backgroundColor: '#002347',
         alignItems: 'center',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-        elevation: 4,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#001a33',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+        elevation: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
     },
     title: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 20,
+        fontWeight: '700',
         color: '#FFFFFF',
         textAlign: 'center',
+        letterSpacing: 0.5,
     },
 });

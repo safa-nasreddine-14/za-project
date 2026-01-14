@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import React, { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
+import axios from 'axios';
 import { ShieldCheck, Bell, Phone, PhoneOff, Mic } from 'lucide-react';
 
 // Connect to backend
 const BASE_URL = import.meta.env.VITE_API_URL || '';
 const socket = io(BASE_URL);
 
+const RINGTONE_DATA_URI = 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAzAAAC1AAZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZ//uQxAAACtsM4AAA0AAAAANIAAAAQZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZ//uQxAAACtsM4AAA0AAAAANIAAAAQZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZ'; // Short silence/beep fallback, but ideally use a real one.
+// Better: Real beep
+const REAL_RINGTONE_URI = 'data:audio/wav;base64,UklGRqAHAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YV4HAACA/5T/m/+e/6H/o/+/v8C/v7+5uLi3t7e0tLOzs7Cvr66urqysrKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKiov+6/7L/sP+u/6v/qf+m/6T/of+f/5z/mv+X/5X/kv+Q/47/i/+J/4b/hP+B/3//fP96/3j/df9z/3D/bv9s/2n/Z/9l/2L/YP9e/1v/Wf9X/1T/Uv9Q/03/S/9J/0b/RP9C/z//Pf87/zj/Nf8z/zD/Lv8s/yn/KP8m/yP/If8f/xz/Gv8Y/xX/E/8R/w7/DP8K/wf/Bv8D/wH///8B/wP/Bf8H/wn/C/8N/w//Ef8T/xX/F/8Z/xt/HX8ffyB/In8kfyd/KX8tfy9/MX8xfzF/MX8xfzV/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81vzW/Nb81v8=';
 const AdminDashboard = ({ token, onLogout }) => {
     const [reports, setReports] = useState([]);
     const [selectedReport, setSelectedReport] = useState(null);
@@ -22,12 +25,17 @@ const AdminDashboard = ({ token, onLogout }) => {
 
 
     const [voices, setVoices] = useState([]);
-    const [activeTab, setActiveTab] = useState('overview'); // Changed default to overview
+    const [activeTab, setActiveTab] = useState('overview');
+    const [audioAllowed, setAudioAllowed] = useState(false); // NEW: Track audio permission
+    const [isSecureContext, setIsSecureContext] = useState(true);
+    const [notifications, setNotifications] = useState([]); // NEW: Non-blocking notifications
+    const iceQueueRef = React.useRef([]); // NEW: Queue for candidates arriving before PC is ready
     const [mapCenter, setMapCenter] = useState([36.75, 3.05]); // Default center
+    const [twilioError, setTwilioError] = useState(null);
 
     const handleLocateEvent = (item) => {
         if (!item.location || item.location === 'غير محدد') {
-            alert('الموقع غير متوفر لهذا الحدث');
+            addNotification('الموقع غير متوفر لهذا الحدث', 'warning');
             return;
         }
         const [lat, lng] = item.location.split(',').map(Number);
@@ -61,6 +69,11 @@ const AdminDashboard = ({ token, onLogout }) => {
             return false;
         };
 
+        // Check for secure context
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setIsSecureContext(false);
+        }
+
         // Fetch initial data
         fetch(`${BASE_URL}/api/reports`, fetchOptions)
             .then(res => {
@@ -91,12 +104,13 @@ const AdminDashboard = ({ token, onLogout }) => {
         // Listen for real-time updates
         socket.on('new_report', (report) => {
             setReports(prev => [report, ...prev]);
-            // Play sound or notification here
+            addNotification(`تقرير جديد: ${report.type} - ${report.description?.substring(0, 30)}...`, 'info');
         });
 
         socket.on('new_alarm', (alarm) => {
-            // No longer using alarms state, just alert and refresh history
-            alert(`⚠️ إنذار جديد من: ${alarm.deviceId || 'مجهول'}!`);
+            // Replaced block alert() with notification and sound trigger
+            triggerAlertSound(); // Trigger ringtone for SOS too
+
             fetch(`${BASE_URL}/api/calls`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(res => {
@@ -107,6 +121,7 @@ const AdminDashboard = ({ token, onLogout }) => {
 
         socket.on('new_voice', (voice) => {
             setVoices(prev => [voice, ...prev]);
+            addNotification('رسالة صوتية جديدة مستلمة', 'info');
         });
 
         socket.on('new_call_history', (call) => {
@@ -121,25 +136,20 @@ const AdminDashboard = ({ token, onLogout }) => {
         socket.on('incoming_call', (data) => {
             console.log('Incoming call from:', data.callerId);
             setCallQueue(prev => {
-                // Check if call from this caller already exists, but update it with latest data (like location)
                 const existingIndex = prev.findIndex(c => c.callerId === data.callerId);
+                // Important: Ensure socketId is preserved
+                const callData = { ...data, timestamp: new Date() };
                 if (existingIndex !== -1) {
                     const newQueue = [...prev];
-                    newQueue[existingIndex] = { ...newQueue[existingIndex], ...data, timestamp: new Date() };
+                    newQueue[existingIndex] = callData;
                     return newQueue;
                 }
-                return [...prev, { ...data, timestamp: new Date() }];
+                return [...prev, callData];
             });
+            iceQueueRef.current = []; // NEW: Reset queue for new incoming call
 
             // Play ringtone if not already playing for another call
-            if (document.querySelectorAll('.ringtone-element').length === 0) {
-                const audio = new Audio('https://raw.githubusercontent.com/xi-lab/sounds/main/ringtone.mp3');
-                audio.loop = true;
-                audio.className = 'ringtone-element';
-                audio.id = 'ringtone';
-                document.body.appendChild(audio);
-                audio.play().catch(e => console.log('Audio play failed', e));
-            }
+            triggerAlertSound();
         });
 
         socket.on('call_ended', (data) => {
@@ -160,10 +170,15 @@ const AdminDashboard = ({ token, onLogout }) => {
         });
 
         socket.on('ice_candidate', async (data) => {
-            if (data.candidate && peerRef.current) {
-                try {
-                    await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-                } catch (e) { console.error("Error adding ice candidate", e); }
+            if (data.candidate) {
+                if (peerRef.current && peerRef.current.remoteDescription) {
+                    try {
+                        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    } catch (e) { console.error("Error adding ice candidate", e); }
+                } else {
+                    console.log('Queuing ICE candidate (PC not ready)');
+                    iceQueueRef.current.push(data.candidate);
+                }
             }
         });
 
@@ -198,6 +213,39 @@ const AdminDashboard = ({ token, onLogout }) => {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const triggerAlertSound = () => {
+        if (document.querySelectorAll('.ringtone-element').length === 0) {
+            // Use /ringtone.mp3 from public folder if exists, fallback to data URI
+            const audio = new Audio('/ringtone.mp3');
+            audio.loop = true;
+            audio.volume = 1.0;
+            audio.className = 'ringtone-element';
+            audio.id = 'ringtone';
+            document.body.appendChild(audio);
+            audio.play()
+                .then(() => setAudioAllowed(true))
+                .catch(e => {
+                    console.error('Audio play failed:', e);
+                    setAudioAllowed(false);
+                    // Fallback to data URI if file fails
+                    const fallback = new Audio(REAL_RINGTONE_URI);
+                    fallback.loop = true;
+                    fallback.volume = 1.0;
+                    fallback.className = 'ringtone-element';
+                    document.body.appendChild(fallback);
+                    fallback.play().catch(() => { });
+                });
+        }
+    };
+
+    const addNotification = (message, type = 'info') => {
+        const id = Date.now();
+        setNotifications(prev => [{ id, message, type }, ...prev]);
+        setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+        }, 8000);
+    };
+
     const stopRingtone = () => {
         const ringtones = document.querySelectorAll('.ringtone-element, #ringtone');
         ringtones.forEach(audio => {
@@ -215,34 +263,64 @@ const AdminDashboard = ({ token, onLogout }) => {
         stopRingtone();
 
         try {
-            // If no WebRTC offer, just do signaling to sync UI
+            // WebRTC Call Initiation
             if (!call || !call.offer) {
-                socket.emit('call_accept', { accepted: true, callerId: call.callerId });
+                console.warn('Call has no WebRTC offer');
+                socket.emit('call_accept', { accepted: true, callerId: call.callerId, targetId: call.socketId });
                 setIsCallActive(true);
                 setActiveCall(call);
-                activeCallRef.current = call; // Update ref immediately
+                activeCallRef.current = call;
                 setCallQueue(prev => prev.filter(c => c.callerId !== call.callerId));
                 return;
             }
 
             const pc = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
+                ]
             });
             peerRef.current = pc;
 
             pc.ontrack = (event) => {
+                console.log('Received remote track on dashboard', event.streams);
                 if (remoteAudioRef.current) {
-                    remoteAudioRef.current.srcObject = event.streams[0];
+                    const rStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+                    remoteAudioRef.current.srcObject = rStream;
+                    remoteAudioRef.current.play().catch(e => console.warn("Dashboard audio play failed:", e));
+                    console.log('Remote stream attached to audio element');
+                }
+            };
+
+            pc.onaddstream = (event) => {
+                console.log('Received remote stream on dashboard', event.stream);
+                if (remoteAudioRef.current) {
+                    remoteAudioRef.current.srcObject = event.stream;
+                    console.log('Remote stream attached via onaddstream');
                 }
             };
 
             pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                    socket.emit('ice_candidate', { candidate: event.candidate, targetId: call.callerId });
+                    socket.emit('ice_candidate', {
+                        candidate: event.candidate,
+                        targetId: call.socketId,
+                        dashboardSocketId: socket.id
+                    });
                 }
             };
 
             await pc.setRemoteDescription(new RTCSessionDescription(call.offer));
+
+            // Process queued ICE candidates
+            console.log(`Processing ${iceQueueRef.current.length} queued candidates`);
+            while (iceQueueRef.current.length > 0) {
+                const cand = iceQueueRef.current.shift();
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (e) { console.warn("Failed to add queued candidate", e); }
+            }
 
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: { echoCancellation: true, noiseSuppression: true }
@@ -250,17 +328,25 @@ const AdminDashboard = ({ token, onLogout }) => {
             localStreamRef.current = stream;
             stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-            const answer = await pc.createAnswer();
+            const answer = await pc.createAnswer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: false
+            });
             await pc.setLocalDescription(answer);
 
-            socket.emit('call_accept', { answer, callerId: call.callerId });
+            socket.emit('call_accept', {
+                answer,
+                callerId: call.callerId,
+                targetId: call.socketId,
+                dashboardSocketId: socket.id
+            });
 
             setIsCallActive(true);
             setActiveCall(call);
             activeCallRef.current = call; // Update ref immediately
             setCallQueue(prev => prev.filter(c => c.callerId !== call.callerId));
         } catch (err) {
-            console.error("WebRTC Answer failed:", err);
+            console.error("Call Answer failed:", err);
             socket.emit('call_accept', { accepted: true, error: 'Mic access failed', callerId: call.callerId });
             setIsCallActive(true);
             setActiveCall(call);
@@ -282,7 +368,10 @@ const AdminDashboard = ({ token, onLogout }) => {
 
     const handleEndActiveCall = () => {
         if (activeCall) {
-            socket.emit('call_reject', { callerId: activeCall.callerId });
+            socket.emit('call_reject', {
+                callerId: activeCall.callerId,
+                targetId: activeCall.socketId
+            });
         }
         cleanupCall();
     };
@@ -299,10 +388,41 @@ const AdminDashboard = ({ token, onLogout }) => {
             peerRef.current.close();
             peerRef.current = null;
         }
+        iceQueueRef.current = [];
     };
 
     return (
-        <div className="flex h-screen bg-gray-100 flex-col md:flex-row overflow-hidden relative" dir="rtl">
+        <div
+            className="flex h-screen bg-gray-100 flex-col md:flex-row overflow-hidden relative"
+            dir="rtl"
+            onClick={() => {
+                // Silent unlock on first click anywhere
+                if (!audioAllowed) {
+                    const audio = new Audio(REAL_RINGTONE_URI);
+                    audio.volume = 0;
+                    audio.play().then(() => {
+                        audio.pause();
+                        setAudioAllowed(true);
+                    }).catch(() => { });
+                }
+            }}
+        >
+            {!isSecureContext && (
+                <div className="bg-red-600 text-white p-4 fixed top-0 w-full z-[100] text-center">
+                    ⚠️ البراوزر يمنع الميكروفون - استخدم localhost أو HTTPS
+                </div>
+            )}
+
+            {/* Twilio Error Banner */}
+            {twilioError && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 fixed top-16 w-full z-[48] flex justify-between items-center animate-pulse" >
+                    <div className="flex items-center gap-2">
+                        <PhoneOff size={24} />
+                        <p className="font-bold">{twilioError}</p>
+                    </div>
+                </div>
+            )}
+
             {/* Active Call Banner */}
             {isCallActive && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[110] bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-pulse">
@@ -317,6 +437,16 @@ const AdminDashboard = ({ token, onLogout }) => {
                     </button>
                 </div>
             )}
+
+            {/* Notifications Toasts */}
+            <div className="fixed top-20 right-6 z-[120] flex flex-col gap-2 w-80">
+                {notifications.map(n => (
+                    <div key={n.id} className={`p-4 rounded-lg shadow-xl text-white flex justify-between items-center transition-all animate-slide-in ${n.type === 'error' ? 'bg-red-600' : 'bg-blue-600'}`}>
+                        <span className="font-medium text-sm">{n.message}</span>
+                        <button onClick={() => setNotifications(prev => prev.filter(notif => notif.id !== n.id))} className="ml-4 opacity-70 hover:opacity-100">✕</button>
+                    </div>
+                ))}
+            </div>
 
             {/* Call Queue Floating Button/Drawer */}
             {!isCallActive && callQueue.length > 0 && (
@@ -724,7 +854,7 @@ const AdminDashboard = ({ token, onLogout }) => {
                                             </button>
                                         </div>
                                         <audio controls className="w-full">
-                                            <source src={`${BASE_URL}/uploads/${voice.filename}`} type="audio/wav" />
+                                            <source src={`${BASE_URL}${voice.path}`} type="audio/mpeg" />
                                             Your browser does not support the audio element.
                                         </audio>
                                     </div>
@@ -851,10 +981,10 @@ const AdminDashboard = ({ token, onLogout }) => {
                                             {selectedReport.media.map((file, idx) => (
                                                 <div key={idx} className="border rounded-lg overflow-hidden bg-gray-100">
                                                     {file.mimetype.startsWith('image/') ? (
-                                                        <img src={`/uploads/${file.filename}`} alt="Evidence" className="w-full h-48 object-cover cursor-pointer hover:opacity-90" onClick={() => window.open(`/uploads/${file.filename}`, '_blank')} />
+                                                        <img src={`${BASE_URL}${file.path}`} alt="Evidence" className="w-full h-48 object-cover" />
                                                     ) : (
                                                         <video controls className="w-full h-48 object-cover">
-                                                            <source src={`/uploads/${file.filename}`} type={file.mimetype} />
+                                                            <source src={`${BASE_URL}${file.path}`} type={file.mimetype} />
                                                             Your browser does not support the video tag.
                                                         </video>
                                                     )}

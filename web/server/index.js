@@ -2,14 +2,77 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import dotenv from 'dotenv';
+dotenv.config();
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import sqlite3 from 'sqlite3';
 
 const app = express();
 const httpServer = createServer(app);
+
+const db = new sqlite3.Database('./database.sqlite', (err) => {
+    if (err) {
+        console.error('Error opening database', err);
+    } else {
+        console.log('Connected to SQLite database');
+        db.serialize(() => {
+            db.run(`CREATE TABLE IF NOT EXISTS reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deviceId TEXT,
+                type TEXT,
+                description TEXT,
+                location TEXT,
+                media TEXT
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS alarms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deviceId TEXT,
+                location TEXT,
+                type TEXT
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS calls (
+                id TEXT PRIMARY KEY,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                callerId TEXT,
+                location TEXT,
+                type TEXT
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS voice_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deviceId TEXT,
+                location TEXT,
+                filename TEXT,
+                path TEXT
+            )`);
+        });
+    }
+});
+
+// Helper for DB queries
+const dbRun = (query, params = []) => {
+    return new Promise((resolve, reject) => {
+        db.run(query, params, function (err) {
+            if (err) reject(err);
+            else resolve(this);
+        });
+    });
+};
+
+const dbAll = (query, params = []) => {
+    return new Promise((resolve, reject) => {
+        db.all(query, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+};
 
 const JWT_SECRET = process.env.JWT_SECRET || 'za-secret-security-key-2024';
 
@@ -95,24 +158,27 @@ app.get('/api/health', (req, res) => {
 });
 
 // Mock Database
-let reports = [];
-let alarms = [];
-let voiceMessages = [];
 let dashboardClients = []; // List of { socketId }
 let lastAssignedIndex = -1;
-let callHistory = []; // Saved calls
 
-const addCallToHistory = (data) => {
+const addCallToHistory = async (data) => {
+    const id = Date.now() + Math.random().toString(36).substr(2, 9);
     const callRecord = {
-        id: Date.now() + Math.random().toString(36).substr(2, 9), // More reliable unique ID
+        id,
         callerId: data.callerId || 'Mobile-User',
         location: data.location || 'غير محدد',
         timestamp: new Date(),
         type: data.type || 'voice'
     };
-    callHistory.unshift(callRecord);
-    if (callHistory.length > 100) callHistory.pop(); // Keep it manageable
-    io.emit('new_call_history', callRecord);
+    try {
+        await dbRun(
+            'INSERT INTO calls (id, timestamp, callerId, location, type) VALUES (?, ?, ?, ?, ?)',
+            [callRecord.id, callRecord.timestamp.toISOString(), callRecord.callerId, callRecord.location, callRecord.type]
+        );
+        io.emit('new_call_history', callRecord);
+    } catch (err) {
+        console.error('Error saving call to DB', err);
+    }
     return callRecord;
 };
 
@@ -168,20 +234,41 @@ io.on('connection', (socket) => {
     });
 
     socket.on('call_accept', (data) => {
-        // data: { answer, callerId }
-        console.log(`Call accepted for ${data.callerId}`);
-        socket.broadcast.emit('call_answered', data);
+        // data: { answer, callerId, targetId }
+        console.log(`Call accepted for ${data.callerId} (Target: ${data.targetId})`);
+        if (data.targetId) {
+            io.to(data.targetId).emit('call_answered', data);
+        } else {
+            socket.broadcast.emit('call_answered', data);
+        }
     });
 
     socket.on('call_reject', (data) => {
-        // data: { callerId }
+        // data: { callerId, targetId }
         console.log(`Call rejected/ended for ${data?.callerId}`);
-        socket.broadcast.emit('call_ended', data);
+        if (data.targetId) {
+            io.to(data.targetId).emit('call_ended', data);
+        } else {
+            socket.broadcast.emit('call_ended', data);
+        }
+    });
+
+    socket.on('call_ended', (data) => {
+        console.log(`Call ended by ${data?.callerId}`);
+        if (data.targetId) {
+            io.to(data.targetId).emit('call_ended', data);
+        } else {
+            socket.broadcast.emit('call_ended', data);
+        }
     });
 
     socket.on('ice_candidate', (data) => {
         // data: { candidate, targetId }
-        socket.broadcast.emit('ice_candidate', data);
+        if (data.targetId) {
+            io.to(data.targetId).emit('ice_candidate', data);
+        } else {
+            socket.broadcast.emit('ice_candidate', data);
+        }
     });
 
     socket.on('disconnect', () => {
@@ -196,16 +283,23 @@ io.on('connection', (socket) => {
 // API Routes
 
 // Get all reports (Protected)
-app.get('/api/reports', authMiddleware, (req, res) => {
-    res.json(reports);
+app.get('/api/reports', authMiddleware, async (req, res) => {
+    try {
+        const rows = await dbAll('SELECT * FROM reports ORDER BY timestamp DESC');
+        const formattedRows = rows.map(r => ({
+            ...r,
+            media: JSON.parse(r.media || '[]')
+        }));
+        res.json(formattedRows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch reports' });
+    }
 });
 
 // Create a new report
-app.post('/api/reports', upload.array('media'), (req, res) => {
+app.post('/api/reports', upload.array('media'), async (req, res) => {
     try {
         console.log('Received report:', req.body);
-        console.log('Files:', req.files?.length || 0);
-
         const files = req.files || [];
         const mediaPaths = files.map(f => ({
             filename: f.filename,
@@ -214,15 +308,22 @@ app.post('/api/reports', upload.array('media'), (req, res) => {
         }));
 
         const newReport = {
-            id: Date.now(),
-            timestamp: new Date(),
-            ...req.body,
-            media: mediaPaths
+            timestamp: new Date().toISOString(),
+            deviceId: req.body.deviceId,
+            type: req.body.type,
+            description: req.body.description,
+            location: req.body.location,
+            media: JSON.stringify(mediaPaths)
         };
 
-        reports.unshift(newReport); // Add to beginning
-        io.emit('new_report', newReport); // Notify admin
-        res.status(201).json(newReport);
+        const result = await dbRun(
+            'INSERT INTO reports (timestamp, deviceId, type, description, location, media) VALUES (?, ?, ?, ?, ?, ?)',
+            [newReport.timestamp, newReport.deviceId, newReport.type, newReport.description, newReport.location, newReport.media]
+        );
+
+        const savedReport = { id: result.lastID, ...newReport, media: mediaPaths };
+        io.emit('new_report', savedReport);
+        res.status(201).json(savedReport);
     } catch (error) {
         console.error('Error creating report:', error);
         res.status(500).json({ error: 'Failed to create report', details: error.message });
@@ -230,7 +331,7 @@ app.post('/api/reports', upload.array('media'), (req, res) => {
 });
 
 // Voice Message Upload
-app.post('/api/voice', upload.single('audio'), (req, res) => {
+app.post('/api/voice', upload.single('audio'), async (req, res) => {
     try {
         console.log('Received voice message:', req.body);
         console.log('Audio file:', req.file?.filename || 'none');
@@ -240,48 +341,63 @@ app.post('/api/voice', upload.single('audio'), (req, res) => {
         }
 
         const voiceMsg = {
-            id: Date.now(),
-            timestamp: new Date(),
+            timestamp: new Date().toISOString(),
             filename: req.file.filename,
             path: `/uploads/${req.file.filename}`,
-            ...req.body // deviceId, location, etc.
+            deviceId: req.body.deviceId || 'Mobile-User',
+            location: req.body.location || 'غير محدد'
         };
 
-        voiceMessages.unshift(voiceMsg);
-        io.emit('new_voice', voiceMsg);
-        res.status(201).json(voiceMsg);
+        const result = await dbRun(
+            'INSERT INTO voice_messages (timestamp, deviceId, location, filename, path) VALUES (?, ?, ?, ?, ?)',
+            [voiceMsg.timestamp, voiceMsg.deviceId, voiceMsg.location, voiceMsg.filename, voiceMsg.path]
+        );
+
+        const savedVoice = { id: result.lastID, ...voiceMsg };
+        io.emit('new_voice', savedVoice);
+        res.status(201).json(savedVoice);
     } catch (error) {
         console.error('Error uploading voice message:', error);
         res.status(500).json({ error: 'Failed to upload voice message', details: error.message });
     }
 });
 
-app.get('/api/voice', authMiddleware, (req, res) => {
-    res.json(voiceMessages);
+app.get('/api/voice', authMiddleware, async (req, res) => {
+    try {
+        const rows = await dbAll('SELECT * FROM voice_messages ORDER BY timestamp DESC');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch voice messages' });
+    }
 });
 
 // Trigger Alarm
-app.post('/api/alarms', (req, res) => {
+app.post('/api/alarms', async (req, res) => {
     try {
         console.log('Received alarm:', req.body);
-
         const newAlarm = {
-            id: Date.now() + Math.random().toString(36).substr(2, 5),
-            timestamp: new Date(),
-            ...req.body
+            timestamp: new Date().toISOString(),
+            deviceId: req.body.deviceId,
+            location: req.body.location,
+            type: req.body.type || 'SOS'
         };
-        alarms.unshift(newAlarm);
-        if (alarms.length > 50) alarms.pop();
 
-        // Use unified logging helper
-        addCallToHistory({
+        const result = await dbRun(
+            'INSERT INTO alarms (timestamp, deviceId, location, type) VALUES (?, ?, ?, ?)',
+            [newAlarm.timestamp, newAlarm.deviceId, newAlarm.location, newAlarm.type]
+        );
+
+        const savedAlarm = { id: result.lastID, ...newAlarm };
+
+        // Log to call history
+        await addCallToHistory({
             callerId: req.body.deviceId || 'Mobile-User',
             location: req.body.location || 'غير محدد',
             type: 'SOS'
         });
 
-        io.emit('new_alarm', newAlarm); // Keep this for urgent popup alert
-        res.status(201).json(newAlarm);
+        io.emit('new_alarm', savedAlarm);
+        res.status(201).json(savedAlarm);
     } catch (error) {
         console.error('Error creating alarm:', error);
         res.status(500).json({ error: 'Failed to create alarm', details: error.message });
@@ -289,14 +405,26 @@ app.post('/api/alarms', (req, res) => {
 });
 
 // Get all alarms
-app.get('/api/alarms', (req, res) => {
-    res.json(alarms);
+app.get('/api/alarms', async (req, res) => {
+    try {
+        const rows = await dbAll('SELECT * FROM alarms ORDER BY timestamp DESC LIMIT 50');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch alarms' });
+    }
 });
 
 // Get call history (Protected)
-app.get('/api/calls', authMiddleware, (req, res) => {
-    res.json(callHistory);
+app.get('/api/calls', authMiddleware, async (req, res) => {
+    try {
+        const rows = await dbAll('SELECT * FROM calls ORDER BY timestamp DESC LIMIT 100');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch calls' });
+    }
 });
+
+
 
 const PORT = process.env.PORT || 3000;
 // Listen on all interfaces
